@@ -108,36 +108,41 @@ def avg_degradation(laps_df, driver, compound):
     else:
         return None
 
-# Storing data in dictionary for FP1
-if laps_FP1 is not None:
-    compounds = laps_FP1['Compound'].unique()
-    avg_degradation_by_compound_FP1 = {}
+# Function stores avg deg for each compound in a dictionary
+def store_average_degradation(laps_session):
+    compounds = laps_session['Compound'].unique()
+    avg_degradation_by_compound_session = {}
     for compound in compounds:
         avg_degradation_driver = {}
-        for drv in laps_FP1['Driver'].unique():
-            avg_deg = avg_degradation(laps_FP1, drv, compound)
+        for drv in laps_session['Driver'].unique():
+            avg_deg = avg_degradation(laps_session, drv, compound)
             avg_degradation_driver[drv] = float(avg_deg) if avg_deg is not None else None
-        avg_degradation_by_compound_FP1[compound] = avg_degradation_driver
+        avg_degradation_by_compound_session[compound] = avg_degradation_driver
+    return avg_degradation_by_compound_session
 
-# Storing data in dictionary for FP2
-if laps_FP2 is not None:
-    compounds = laps_FP2['Compound'].unique()
-    avg_degradation_by_compound_FP2 = {}
-    for compound in compounds:
-        avg_degradation_driver = {}
-        for drv in laps_FP2['Driver'].unique():
-            avg_deg = avg_degradation(laps_FP2, drv, compound)
-            avg_degradation_driver[drv] = float(avg_deg) if avg_deg is not None else None
-        avg_degradation_by_compound_FP2[compound] = avg_degradation_driver
+# Storing avg degradation according to the sessions
+if laps_FP1 is not None: avg_degradation_by_compound_FP1 = store_average_degradation(laps_FP1)
+if laps_FP2 is not None: avg_degradation_by_compound_FP2 = store_average_degradation(laps_FP3)
+if laps_FP3 is not None: avg_degradation_by_compound_FP3 = store_average_degradation(laps_FP3)
+ 
+# ---------------------------------- Total laps completed by drivers ------------------------------------ #
 
-# Storing data in dictionary for FP3
-if laps_FP3 is not None:
-    compounds = laps_FP3['Compound'].unique()
-    avg_degradation_by_compound_FP3 = {}
-    for compound in compounds:
-        avg_degradation_driver = {}
-        for drv in laps_FP3['Driver'].unique():
-            avg_deg = avg_degradation(laps_FP3, drv, compound)
-            avg_degradation_driver[drv] = float(avg_deg) if avg_deg is not None else None
-        avg_degradation_by_compound_FP3[compound] = avg_degradation_driver
-pprint.pprint(avg_degradation_by_compound_FP3)
+# Functions return total complete laps
+def total_laps(laps_df, driver):
+    driver_laps = laps_df.pick_drivers([driver])
+    total_laps = driver_laps[driver_laps['IsAccurate'] == True]
+    return len(total_laps)
+
+# Function stores total laps by each driver in a dictionary
+def store_total_laps(laps_session):
+    total_laps_driver = {}
+    if laps_session is not None:
+        for drv in laps_session['Driver'].unique():
+            total_lap = total_laps(laps_session, drv)
+            total_laps_driver[drv] = total_lap
+    return total_laps_driver
+
+# Storing total laps according to the sessions
+total_laps_in_FP1 = store_total_laps(laps_FP1)
+total_laps_in_FP2 = store_total_laps(laps_FP2)
+total_laps_in_FP3 = store_total_laps(laps_FP3)
