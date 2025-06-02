@@ -150,6 +150,15 @@ total_laps_in_FP1 = store_total_laps(laps_FP1)
 total_laps_in_FP2 = store_total_laps(laps_FP2)
 total_laps_in_FP3 = store_total_laps(laps_FP3)
 
+total_laps_all = {}
+all_drivers_total_laps = set(total_laps_in_FP1.keys()) | set(total_laps_in_FP2.keys()) | set(total_laps_in_FP3.keys())
+for drv in all_drivers_total_laps:
+    laps = [
+        total_laps_in_FP1.get(drv, 0),
+        total_laps_in_FP2.get(drv, 0),
+        total_laps_in_FP3.get(drv, 0)
+    ]
+    total_laps_all[drv] = sum(laps)
 # ---------------------------------- Top speed by each driver ------------------------------------ #
 
 # This function calculate the top speed of the car
@@ -176,6 +185,17 @@ def store_top_speed(laps_session):
 top_speed_FP1 = store_top_speed(laps_FP1)
 top_speed_FP2 = store_top_speed(laps_FP2)
 top_speed_FP3 = store_top_speed(laps_FP3)
+
+# Finds and stores the avg speed accross all the sessions of practice 
+avg_top_speed = {}
+all_drivers_speed = set(top_speed_FP1.keys()) | set(top_speed_FP2.keys()) | set(top_speed_FP3.keys())
+for drv in all_drivers_speed:
+    speed = []
+    for session_speed in [top_speed_FP1, top_speed_FP2, top_speed_FP3]:
+        speeds = session_speed.get(drv)
+        if speed is None:
+            speed.append(speeds)
+    avg_top_speed[drv] = np.mean(speeds) if speeds else None
 
 # ---------------------------------- Finding the fastest lap from the Qualifying ------------------------------------ #
 def fastest_laps(laps_df, driver):
@@ -204,7 +224,6 @@ if laps_qualifying is not None:
 fastest_driver = min(fastest_laps_by_driver, key=lambda d: fastest_laps_by_driver[d]['TotalTime'])
 best_qualifying_time = fastest_laps_by_driver[fastest_driver]['TotalTime']
 
-print(f"Fastest lap: {fastest_driver}, {best_qualifying_time}sec")
 
 # Find position to delta 
 if laps_qualifying is not None:
@@ -227,3 +246,29 @@ if laps_qualifying is not None:
     for pos, drv in enumerate(sorted_driver, start=1):
         qualifying_position[drv] = pos
 
+# ---------------------------------- Storing all feature ------------------------------------ #
+all_features = {}
+for drv in laps_qualifying['Driver'].unique():
+    row = {
+        'Driver': drv,
+        'AVG_Time_Soft': avg_time_by_compound_FP2.get('SOFT', {}).get(drv, None),
+        'AVG_Time_Medium': avg_time_by_compound_FP2.get('MEDIUM', {}).get(drv, None),
+        'AVG_Time_Hard': avg_time_by_compound_FP2.get('HARD', {}).get(drv, None),
+        'AVG_Soft_Degradation': avg_degradation_by_compound_FP2.get('SOFT', {}).get(drv, None),
+        'AVG_Medium_Degradation': avg_degradation_by_compound_FP2.get('MEDIUM', {}).get(drv, None),
+        'AVG_Hard_Degradation': avg_degradation_by_compound_FP2.get('HARD', {}).get(drv, None),
+        'Total_Laps': total_laps_all.get(drv, None),
+        'Top_Speed': avg_top_speed.get(drv, None),
+        'Qualifying_time': fastest_laps_by_driver.get(drv, {}).get('TotalTime', None),
+        'Sector_1_time': fastest_laps_by_driver.get(drv, {}).get('Sector1', None),
+        'Sector_2_time': fastest_laps_by_driver.get(drv, {}).get('Sector2', None),
+        'Sector_3_time': fastest_laps_by_driver.get(drv, {}).get('Sector3', None),
+        'Qualifying_Position' : qualifying_position.get(drv, None),
+        'Delta_Time_To_Leader' : delta_to_pole.get(drv, None)
+    }
+    all_features[drv] = row
+
+df_features = pd.DataFrame.from_dict(all_features, orient='index')
+df_features['Top3'] = df_features['Qualifying_Position'].apply(lambda x: 1 if x <= 3 else 0)
+
+df_features.to_csv('spain_gp_2025_features.csv', index=False)
