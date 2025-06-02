@@ -146,3 +146,30 @@ def store_total_laps(laps_session):
 total_laps_in_FP1 = store_total_laps(laps_FP1)
 total_laps_in_FP2 = store_total_laps(laps_FP2)
 total_laps_in_FP3 = store_total_laps(laps_FP3)
+
+# ---------------------------------- Total laps completed by drivers ------------------------------------ #
+
+# This function calculate the top speed of the car
+def top_speed(laps_df, driver):
+    driver_laps = laps_df.pick_drivers([driver])
+    speed = driver_laps[driver_laps['IsAccurate'] == True].pick_fastest()
+    if speed is None or speed.empty:
+        return None
+    if (pd.isna(speed['DriverNumber'])):
+        return None
+    telemetry_data = speed.get_car_data()
+    return float(telemetry_data['Speed'].max())
+
+# Function store the top speed by each driver in a dictionary
+def store_top_speed(laps_session):
+    top_speeds = {}
+    if laps_session is not None:
+        for drv in laps_session['Driver'].unique():
+            speed = top_speed(laps_session, drv)
+            top_speeds[drv] = speed
+    return top_speeds
+
+# Storing top speed of different sessions
+top_speed_FP1 = store_top_speed(laps_FP1)
+top_speed_FP2 = store_top_speed(laps_FP2)
+top_speed_FP3 = store_top_speed(laps_FP3)
