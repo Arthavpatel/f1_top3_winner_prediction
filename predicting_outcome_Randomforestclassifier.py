@@ -11,7 +11,7 @@ f1.Cache.enable_cache(cache)
 
 grand_prix_name = 'Spanish Grand Prix'
 year = 2025
-practice_sessions = ['FP1', 'FP2', 'FP3']
+practice_sessions = ['FP1', 'FP2', 'FP3', 'Q']
 laps_data = {}
 
 for session_name in practice_sessions:
@@ -34,6 +34,9 @@ laps_FP3 = laps_data.get('FP3')
 if laps_FP3 is None:
     print(f"❌ FP3 data unavailable")
 
+laps_qualifying = laps_data.get('Q')
+if laps_qualifying is None:
+    print(f"❌ Qualifying data unavailable")
 # ---------------------------------- Average lap time for each compound ------------------------------------ #
 
 # Function to calculate the avg time
@@ -122,7 +125,7 @@ def store_average_degradation(laps_session):
 
 # Storing avg degradation according to the sessions
 if laps_FP1 is not None: avg_degradation_by_compound_FP1 = store_average_degradation(laps_FP1)
-if laps_FP2 is not None: avg_degradation_by_compound_FP2 = store_average_degradation(laps_FP3)
+if laps_FP2 is not None: avg_degradation_by_compound_FP2 = store_average_degradation(laps_FP2)
 if laps_FP3 is not None: avg_degradation_by_compound_FP3 = store_average_degradation(laps_FP3)
  
 # ---------------------------------- Total laps completed by drivers ------------------------------------ #
@@ -147,7 +150,7 @@ total_laps_in_FP1 = store_total_laps(laps_FP1)
 total_laps_in_FP2 = store_total_laps(laps_FP2)
 total_laps_in_FP3 = store_total_laps(laps_FP3)
 
-# ---------------------------------- Total laps completed by drivers ------------------------------------ #
+# ---------------------------------- Top speed by each driver ------------------------------------ #
 
 # This function calculate the top speed of the car
 def top_speed(laps_df, driver):
@@ -173,3 +176,54 @@ def store_top_speed(laps_session):
 top_speed_FP1 = store_top_speed(laps_FP1)
 top_speed_FP2 = store_top_speed(laps_FP2)
 top_speed_FP3 = store_top_speed(laps_FP3)
+
+# ---------------------------------- Finding the fastest lap from the Qualifying ------------------------------------ #
+def fastest_laps(laps_df, driver):
+    driver_laps = laps_df.pick_drivers([driver])
+    accurate_laps = driver_laps[driver_laps['IsAccurate'] == True]
+    fastest_lap = accurate_laps.pick_fastest()
+
+    if fastest_lap is None or pd.isna(fastest_lap['LapTime']):
+        return None
+
+    return {
+        'TotalTime': fastest_lap['LapTime'].total_seconds(),
+        'Sector1': fastest_lap['Sector1Time'].total_seconds() if pd.notna(fastest_lap['Sector1Time']) else None,
+        'Sector2': fastest_lap['Sector2Time'].total_seconds() if pd.notna(fastest_lap['Sector2Time']) else None,
+        'Sector3': fastest_lap['Sector3Time'].total_seconds() if pd.notna(fastest_lap['Sector3Time']) else None
+    }
+
+# Storing fastest lap time in dictionary 
+if laps_qualifying is not None:
+    fastest_laps_by_driver = {}
+    for drv in laps_qualifying["Driver"].unique():
+        fastest = fastest_laps(laps_qualifying, drv)  
+        fastest_laps_by_driver[drv] = fastest
+
+# finding the fastest time and the driver from the qualifying session
+fastest_driver = min(fastest_laps_by_driver, key=lambda d: fastest_laps_by_driver[d]['TotalTime'])
+best_qualifying_time = fastest_laps_by_driver[fastest_driver]['TotalTime']
+
+print(f"Fastest lap: {fastest_driver}, {best_qualifying_time}sec")
+
+# Find position to delta 
+if laps_qualifying is not None:
+    delta_to_pole = {}
+    for drv in laps_qualifying['Driver'].unique():
+        driver_time = fastest_laps_by_driver[drv]
+        if driver_time is not None:
+            delta = driver_time['TotalTime'] - best_qualifying_time
+            delta_to_pole[drv] = delta
+        else:
+            delta_to_pole[drv] = None
+
+# Find Qualiying positions 
+if laps_qualifying is not None:
+    qualifying_position = {}
+    sorted_driver = sorted(
+        [drv for drv in fastest_laps_by_driver if fastest_laps_by_driver[drv] is not None],
+        key=lambda d: fastest_laps_by_driver[d]['TotalTime']
+    )
+    for pos, drv in enumerate(sorted_driver, start=1):
+        qualifying_position[drv] = pos
+
