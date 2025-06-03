@@ -3,13 +3,18 @@ import numpy as np
 import pandas as pd
 import os
 import pprint as pprint
+import joblib
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+
 cache = '/Users/arthavpatel/Desktop/race_outcome_prediction/f1_cache'
 os.makedirs(cache, exist_ok=True)
 f1.Cache.enable_cache(cache)
 
 # ---------------------------------- Loading the Grand Prix ------------------------------------ #
 
-grand_prix_name = 'Spanish Grand Prix'
+grand_prix_name = 'Spain Grand Prix'
 year = 2025
 practice_sessions = ['FP1', 'FP2', 'FP3', 'Q']
 laps_data = {}
@@ -193,7 +198,7 @@ for drv in all_drivers_speed:
     speed = []
     for session_speed in [top_speed_FP1, top_speed_FP2, top_speed_FP3]:
         speeds = session_speed.get(drv)
-        if speed is None:
+        if speed is not None:
             speed.append(speeds)
     avg_top_speed[drv] = np.mean(speeds) if speeds else None
 
@@ -264,11 +269,47 @@ for drv in laps_qualifying['Driver'].unique():
         'Sector_2_time': fastest_laps_by_driver.get(drv, {}).get('Sector2', None),
         'Sector_3_time': fastest_laps_by_driver.get(drv, {}).get('Sector3', None),
         'Qualifying_Position' : qualifying_position.get(drv, None),
-        'Delta_Time_To_Leader' : delta_to_pole.get(drv, None)
+        'Delta_Time_To_Leader' : delta_to_pole.get(drv, None),
+        'Finish_Position' : qualifying_position.get(drv, None)
     }
     all_features[drv] = row
 
 df_features = pd.DataFrame.from_dict(all_features, orient='index')
-df_features['Top3'] = df_features['Qualifying_Position'].apply(lambda x: 1 if x <= 3 else 0)
-
 df_features.to_csv('spain_gp_2025_features.csv', index=False)
+
+
+# ---------------------------------- Building the model and training it ------------------------------------ #
+training_df = pd.read_csv('spain_gp_2025_features.csv')
+training_df['Top_3'] = training_df['Finish_Position'].apply(lambda x: 1 if x <= 3 else 0)
+
+X_Train = training_df.drop(columns=['Driver', 'Finish_Position','Top_3'])
+Y_Train = training_df['Top_3']
+
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_Train, Y_Train)
+
+joblib.dump(model, 'top3_model.pkl')
+print("Model trained")
+
+def predict_top3(csv_path, output_path='top3_prediction.csv'):
+    model = joblib.load('top3_model.pkl')
+
+    df = pd.read_csv(csv_path)
+    df.drop(columns=[col for col in ['Finish_Position', 'Top_3'] if col in df.columns], inplace=True, errors='ignore')
+    driver = df['Driver']
+    X = df.drop(columns=['Driver'])
+
+    Y_prediction = model.predict(X)
+    Y_probability = model.predict_proba(X)[:, 1]
+
+    result = pd.DataFrame({
+        'Driver' : driver,
+        'Predicted_Top_3' : Y_prediction,
+        'Top_3_Probability' : Y_probability
+    })
+    result = result.sort_values('Top_3_Probability', ascending=False).reset_index(drop=True)
+
+    result.to_csv(output_path, index=False)
+    print(result.head(3))
+
+predict_top3('spain_gp_2025_features.csv')
