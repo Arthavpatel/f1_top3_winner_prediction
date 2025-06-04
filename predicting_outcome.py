@@ -5,8 +5,8 @@ import os
 import pprint as pprint
 import joblib
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
+from xgboost import XGBClassifier
+from sklearn.metrics import classification_report, confusion_matrix
 
 cache = '/Users/arthavpatel/Desktop/race_outcome_prediction/f1_cache'
 os.makedirs(cache, exist_ok=True)
@@ -14,7 +14,7 @@ f1.Cache.enable_cache(cache)
 
 # ---------------------------------- Loading the Grand Prix ------------------------------------ #
 
-grand_prix_name = 'Spain Grand Prix'
+grand_prix_name = 'Monaco Grand Prix'
 year = 2025
 practice_sessions = ['FP1', 'FP2', 'FP3', 'Q']
 laps_data = {}
@@ -250,10 +250,37 @@ if laps_qualifying is not None:
     )
     for pos, drv in enumerate(sorted_driver, start=1):
         qualifying_position[drv] = pos
-
+# ---------------------------------- Storing teams constructor points ------------------------------------ #
+driver_team_map = {
+    'NOR': 'McLaren', 'PIA': 'McLaren',
+    'LEC': 'Ferrari', 'HAM': 'Ferrari',
+    'RUS': 'Mercedes', 'ANT': 'Mercedes',
+    'VER': 'Red Bull Racing', 'TSU': 'Red Bull Racing',
+    'ALB': 'Williams', 'SAI': 'Williams',
+    'LAW': 'Racing Bulls', 'HAJ': 'Racing Bulls',
+    'OCO': 'Haas', 'BEA': 'Haas',
+    'HUL': 'Kick Sauber', 'BOR': 'Kick Sauber',
+    'ALO': 'Aston Martin', 'STR': 'Aston Martin',
+    'GAS': 'Alpine', 'COL': 'Alpine'
+}
+team_points = {
+    'McLaren': 319,
+    'Ferrari': 142,
+    'Mercedes': 147,
+    'Red Bull Racing': 143,
+    'Williams': 42,
+    'Racing Bulls': 28,
+    'Haas': 25,
+    'Kick Sauber': 13,
+    'Aston Martin': 16,
+    'Alpine': 10
+}
 # ---------------------------------- Storing all feature ------------------------------------ #
 all_features = {}
 for drv in laps_qualifying['Driver'].unique():
+    team = driver_team_map.get(drv)
+    constructor_pts = team_points.get(team, 0)
+
     row = {
         'Driver': drv,
         'AVG_Time_Soft': avg_time_by_compound_FP2.get('SOFT', {}).get(drv, None),
@@ -270,7 +297,8 @@ for drv in laps_qualifying['Driver'].unique():
         'Sector_3_time': fastest_laps_by_driver.get(drv, {}).get('Sector3', None),
         'Qualifying_Position' : qualifying_position.get(drv, None),
         'Delta_Time_To_Leader' : delta_to_pole.get(drv, None),
-        'Finish_Position' : qualifying_position.get(drv, None)
+        'Finish_Position' : qualifying_position.get(drv, None),
+        'Constructors_Points' : constructor_pts
     }
     all_features[drv] = row
 
@@ -285,9 +313,12 @@ training_df['Top_3'] = training_df['Finish_Position'].apply(lambda x: 1 if x <= 
 X_Train = training_df.drop(columns=['Driver', 'Finish_Position','Top_3'])
 Y_Train = training_df['Top_3']
 
-model = RandomForestClassifier(n_estimators=100, random_state=42)
+model = XGBClassifier(n_estimators=100, use_label_encoder=False, eval_metric='logloss', random_state=42)
 model.fit(X_Train, Y_Train)
 
+Y_pred = model.predict(X_Train)
+print(classification_report(Y_Train, Y_pred))
+print(confusion_matrix(Y_Train, Y_pred))
 joblib.dump(model, 'top3_model.pkl')
 print("Model trained")
 
@@ -310,6 +341,6 @@ def predict_top3(csv_path, output_path='top3_prediction.csv'):
     result = result.sort_values('Top_3_Probability', ascending=False).reset_index(drop=True)
 
     result.to_csv(output_path, index=False)
-    print(result.head(3))
+    print(f"🏆Top 3{result.head(3)}")
 
 predict_top3('spain_gp_2025_features.csv')
